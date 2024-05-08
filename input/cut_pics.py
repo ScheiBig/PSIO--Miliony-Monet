@@ -4,7 +4,7 @@ import numpy as np
 
 import utils.ansi as ansi
 
-list_dir = [i for i in os.listdir("./input/raw_pics") if i.endswith(".jpg")]
+list_dir = [ i for i in os.listdir("./input/raw_pics") ]
 print()
 
 for i, im in enumerate(list_dir):

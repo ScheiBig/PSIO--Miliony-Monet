@@ -4,8 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 for im in os.listdir("./input/raw_pics"):
-	if not im.endswith(".jpg"):
-		continue
 	img = ski.io.imread(f"./input/raw_pics/{im}")
 	h, w, _ = img.shape
 	if h < w:
