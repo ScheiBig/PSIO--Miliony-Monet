@@ -1,6 +1,7 @@
 import os
 import random as r
 import time as t
+import subprocess as sps
 
 import numpy as np
 import cv2
@@ -33,6 +34,14 @@ MAX_W_JIT = 30
 off_bg = (h - w) // 2
 
 finalizing = False
+
+writer = cv2.VideoWriter(
+	"./input/anim_generated/notes_on_belt.mkv",
+	cv2.VideoWriter.fourcc(*"h264"),
+	fps= 30,
+	frameSize= (w // 2, w // 2),
+	isColor= True
+)
 
 print()
 
@@ -78,12 +87,35 @@ for i in INTs:
 
 	out_crop = cv2.resize(crop, (w // 2, w // 2))
 
-	ansi.progress(i // 100, 67, label=f"{i:7} of 6736", returns= True)
+	ansi.progress(i // 100, 67, label=f"{i:7} of 6715", returns=True)
 
-	cv2.imshow("crop", out_crop)
-	cv2.waitKey(1000 // 30)
+	# cv2.imshow("crop", out_crop)
+	# cv2.waitKey(1000 // 30)
+	writer.write(out_crop)
 
 	off += OFFSET_GAIN + h_off
 
+
+writer.release()
 cv2.destroyAllWindows()
-print("Finished")
+print("Finished rendering")
+
+sps.call([
+    "ffmpeg",
+    "-i", "./input/anim_generated/notes_on_belt.mkv",
+    "-vcodec", "libx264",
+    "-b:v", "2M",
+    "-minrate", "2M",
+    "-maxrate", "2M",
+    "-bufsize", "4M",
+    "-vf", "scale=858:858",
+    "-r", "30",
+    "-y",
+    "./input/anim_generated/notes_on_belt_sm.mkv"
+])
+
+os.remove("./input/anim_generated/notes_on_belt.mkv")
+os.rename(
+	"./input/anim_generated/notes_on_belt_sm.mkv",
+	"./input/anim_generated/notes_on_belt.mkv"
+)
