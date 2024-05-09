@@ -6,16 +6,16 @@ import subprocess as sps
 import numpy as np
 import cv2
 
-from utils import ansi, ints, offsets
-from utils.pid import pid
-from utils.slideshow import slideshow
+from utils import *
+from utils.pid import *
+from utils.slideshow import *
 
 r.seed("Chcemy losowo, ale przewidywalnie")
 
 takes = slideshow([ 
 	f"./input/cut_pics/{o}" 
 	for o in os.listdir("./input/cut_pics")
-	if o.startswith("notes_")# and o.endswith("2.jpg")
+	if o.startswith("notes_")
 ])
 cur_take = cv2.imread("./input/cut_pics/calibration_card.jpg")
 next_take = cur_take
@@ -64,8 +64,6 @@ for i in INTs:
 	w_off = offsets(int(w_off_jit))
 	crop = bg_take[off_bg:-off_bg, :, :].copy()
 
-	# TODO: add jitter as additional offset
-
 	if off > h:
 		cur_take = next_take
 		off -= h
@@ -101,17 +99,25 @@ cv2.destroyAllWindows()
 print("Finished rendering")
 
 sps.call([
-    "ffmpeg",
-    "-i", "./input/anim_generated/notes_on_belt.mkv",
-    "-vcodec", "libx264",
-    "-b:v", "2M",
-    "-minrate", "2M",
-    "-maxrate", "2M",
-    "-bufsize", "4M",
-    "-vf", "scale=858:858",
-    "-r", "30",
-    "-y",
-    "./input/anim_generated/notes_on_belt_sm.mkv"
+	"ffmpeg",
+	"-i", 
+		"./input/anim_generated/notes_on_belt.mkv",
+	"-vcodec",
+	 	"libx264",
+	"-b:v",
+		"2M",
+	"-minrate",
+		"2M",
+	"-maxrate",
+		"2M",
+	"-bufsize",
+		"4M",
+	"-vf",
+		"scale=858:858",
+	"-r",
+		"30",
+	"-y",
+	"./input/anim_generated/notes_on_belt_sm.mkv"
 ])
 
 os.remove("./input/anim_generated/notes_on_belt.mkv")

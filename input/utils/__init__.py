@@ -4,7 +4,11 @@ import typing as T
 __all__ = [
 	"sign",
 	"offsets",
-	"ints"
+	"ints",
+
+	"ansi",
+	"pid",
+	"slideshow",
 ]
 
 def sign(a) -> T.Literal[-1, 0, 1]:
