@@ -19,6 +19,15 @@ application** that uses it, therefore application using this module **should
 
 import typing as _t
 
+__all__ = [
+	"fg",
+	"bg",
+	"fmt",
+	"clear",
+	"cur",
+	"progress",
+]
+
 class fg:
 	'''Foreground colors'''
 	BLACK   = "\u001b[30m"
