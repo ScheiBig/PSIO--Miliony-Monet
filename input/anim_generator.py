@@ -15,7 +15,7 @@ r.seed("Chcemy losowo, ale przewidywalnie")
 takes = slideshow([ 
 	f"./input/cut_pics/{o}" 
 	for o in os.listdir("./input/cut_pics")
-	if o.startswith("notes_")
+	if o.startswith("notes_") and not o.endswith("org.jpg")
 ])
 cur_take = cv2.imread("./input/cut_pics/calibration_card.jpg")
 next_take = cur_take
@@ -36,7 +36,7 @@ off_bg = (h - w) // 2
 finalizing = False
 
 writer = cv2.VideoWriter(
-	"./input/anim_generated/notes_on_belt.mkv",
+	"./input/notes_on_belt.mkv",
 	cv2.VideoWriter.fourcc(*"h264"),
 	fps= 30,
 	frameSize= (w // 2, w // 2),
@@ -101,7 +101,7 @@ print("Finished rendering")
 sps.call([
 	"ffmpeg",
 	"-i", 
-		"./input/anim_generated/notes_on_belt.mkv",
+		"./input/notes_on_belt.mkv",
 	"-vcodec",
 	 	"libx264",
 	"-b:v",
@@ -117,11 +117,11 @@ sps.call([
 	"-r",
 		"30",
 	"-y",
-	"./input/anim_generated/notes_on_belt_sm.mkv"
+	"./input/notes_on_belt_sm.mkv"
 ])
 
-os.remove("./input/anim_generated/notes_on_belt.mkv")
+os.remove("./input/notes_on_belt.mkv")
 os.rename(
-	"./input/anim_generated/notes_on_belt_sm.mkv",
-	"./input/anim_generated/notes_on_belt.mkv"
+	"./input/notes_on_belt_sm.mkv",
+	"./input/notes_on_belt.mkv"
 )
