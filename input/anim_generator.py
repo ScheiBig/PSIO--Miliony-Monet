@@ -15,8 +15,9 @@ r.seed("Chcemy losowo, ale przewidywalnie")
 takes = slideshow([ 
 	f"./input/cut_pics/{o}" 
 	for o in os.listdir("./input/cut_pics")
-	if o.startswith("notes_") and not o.endswith("org.jpg")
+	if o.startswith("notes_") and not o.endswith("org.jpg") and not o.endswith("unused.jpg")
 ])
+
 cur_take = cv2.imread("./input/cut_pics/calibration_card.jpg")
 next_take = cur_take
 bg_take = cv2.imread("./input/cut_pics/calibration_bg.jpg")
@@ -109,7 +110,7 @@ sps.call([
 	"-minrate",
 		"2M",
 	"-maxrate",
-		"2M",
+		"3M",
 	"-bufsize",
 		"4M",
 	"-vf",
