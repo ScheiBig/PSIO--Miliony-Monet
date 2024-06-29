@@ -4,6 +4,7 @@ import numpy as np
 
 from typing import TypedDict
 
+CALIBRATION_CARD_SIDE_CM = 10.0
 
 def find_card(img: np.ndarray) -> tuple[list[np.ndarray], cv2.typing.RotatedRect, bool]:
 	'''
@@ -15,6 +16,7 @@ def find_card(img: np.ndarray) -> tuple[list[np.ndarray], cv2.typing.RotatedRect
 	otherwise ``([box], rect, True)`` where ``box`` is contour of card, and ``rect`` is min-area
 	``RotatedRect``.
 	'''
+
 	contours, _ = cv2.findContours(
 		img,
 		cv2.RETR_TREE,
@@ -67,11 +69,17 @@ def calculate_size_and_speed(
 
 	global calibrated_size
 	calibrated_size = {
-		k: (v_w / 10 * px_size, v_h / 10 * px_size)
+		k: (
+			v_w / CALIBRATION_CARD_SIDE_CM * px_size,
+			v_h / CALIBRATION_CARD_SIDE_CM * px_size
+		)
 			for k, (v_w, v_h) in _og_size.items()
 	}
 
-	return px_size, sum(dists) / len(dists)
+	global calibrated_speed
+	calibrated_speed = sum(dists) / len(dists)
+
+	return px_size, calibrated_speed
 
 
 def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:
@@ -99,3 +107,5 @@ _og_size: Pln = {
 
 calibrated_size: Pln = {}
 '''Sizes of banknotes, calibrated do pixels on capture stream.'''
+
+calibrated_speed: float
