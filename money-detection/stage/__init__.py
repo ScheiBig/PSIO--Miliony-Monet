@@ -1,13 +1,13 @@
 from . import (
 	calibration,
-	detection,
+	segmentation,
 	processing,
-	tracking
+	tracking,
 )
 
 __all__ = [
-    "calibration",
-    "detection",
+	"calibration",
+	"segmentation",
 	"processing",
 	"tracking",
 ]

@@ -73,8 +73,6 @@ def detect_silhouettes(img: np.ndarray) -> tuple[
 			True
 		)
 
-		print(f"{i:3.0f}: {len(poly_cont):4.0f} :: {cv2.contourArea(poly_cont):6.0f}")
-
 		if len(poly_cont) == 4:
 
 			match _test_shape_validity(poly_cont, (min_y, max_y)):
