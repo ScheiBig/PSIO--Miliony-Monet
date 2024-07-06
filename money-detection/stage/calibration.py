@@ -75,6 +75,7 @@ def calculate_size_and_speed(
 		)
 			for k, (v_w, v_h) in _og_size.items()
 	}
+	calibrated_size["0"] = px_size
 
 	global calibrated_speed
 	calibrated_speed = sum(dists) / len(dists)
@@ -88,6 +89,7 @@ def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> flo
 	return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 Pln = TypedDict("Pln", {
+	"0": float,
 	"10": tuple[float, float],
 	"20": tuple[float, float],
 	"50": tuple[float, float],

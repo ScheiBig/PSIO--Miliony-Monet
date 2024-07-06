@@ -32,7 +32,7 @@ for o in os.listdir("./input/masks"):
 
 		new_mask = scipy.ndimage.rotate(new_mask, 360 - i, reshape=True)
 
-		b_mask = np.max(new_mask, 2)
+		b_mask = np.max(new_mask, axis= 2)
 		new_mask = new_mask[~np.all(b_mask == 0, axis=1), :, :]
 
 		b_mask = b_mask[~np.all(b_mask == 0, axis=1)]

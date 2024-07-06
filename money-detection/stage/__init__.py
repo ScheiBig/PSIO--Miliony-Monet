@@ -3,6 +3,7 @@ from . import (
 	segmentation,
 	processing,
 	tracking,
+	detection,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
 	"segmentation",
 	"processing",
 	"tracking",
+	"detection",
 ]
