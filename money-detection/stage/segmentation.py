@@ -359,7 +359,7 @@ def _test_shape_validity(
 		return "error"
 
 
-def _test_shape_touches_side(contour_or_box: np.ndarray, min_max_y) -> np.bool:
+def _test_shape_touches_side(contour_or_box: np.ndarray, min_max_y) -> np.bool_:
 	'''
 	Test whether shape touches sides of capture.
 

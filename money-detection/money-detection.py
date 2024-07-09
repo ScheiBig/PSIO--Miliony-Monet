@@ -24,14 +24,14 @@ bg_threshold = 20
 calibration_size: list[float] = list()
 calibration_points: list[tuple[float, float]] = list()
 
-size_px_per_cm: float = None
-speed_px_per_frame: float = None
+size_px_per_cm: float | None = None
+speed_px_per_frame: float | None = None
 
 atexit.register(lambda: stage.tracking.write_log("LOG"))
 
 while keep:
 	frame_was_read, frame = cap.read()
-	frame_no = cap.get(cv2.CAP_PROP_POS_FRAMES)
+	frame_no = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
 	if not frame_was_read:
 		# No next frame is present - video is finished
 		cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no - 1)

@@ -6,12 +6,14 @@ import cv2.typing as cv2_t
 import numpy as np
 from stage import calibration
 from abc import abstractmethod, ABC
-import pytesseract
+import easyocr
 import skimage as ski
 
 AVG_ELEMENT_DROP_PTC = 0.05
 AVG_VALID_AVG_MAX = 24
 GAUSS_K_SIZE = 5
+
+reader = easyocr.Reader(["en"])
 
 class detected_banknote(ABC):
 
@@ -232,7 +234,7 @@ def detect_banknotes(
 		# rotate banknote into vertical position
 		r_mat = cv2.getRotationMatrix2D((side // 2, side // 2), r_a, 1)
 		banknote = cv2.warpAffine(banknote, r_mat, (side, side))
-		cv2.imshow(f"{time.time()}", banknote)
+		# cv2.imshow(f"{time.time()}", banknote)
 		# remove outside bands
 		off_x = (side - r_w) // 2
 		off_y = (side - r_h) // 2
@@ -311,10 +313,10 @@ def _detect_back(banknote: np.ndarray, og_rect: rotatedIntRect) -> banknote_back
 	den = cv2.resize(den, (den.shape[1] * 2, den.shape[0] * 2), interpolation= cv2.INTER_LINEAR)
 	den = cv2.morphologyEx(den, cv2.MORPH_OPEN, ski.morphology.disk(1))
 
-	print("Detected denomination:", pytesseract.image_to_string(den))
+	print("Detected denomination:", reader.readtext(den))
 
 	# cv2.imshow(f"{time.time()}", banknote)
-	cv2.imshow(f"{time.time()}", den)
+	# cv2.imshow(f"{time.time()}", den)
 
 
 # def detect_banknotes(
