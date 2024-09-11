@@ -37,30 +37,32 @@ class log_entry(object):
 		return f"Objekt śledzony między klatkami {self.first_appearance:4.0f} " \
 			f"oraz {lost_sight} - z pewnością {self.confidence * 100:4.1f}% " \
 			f"dopasowano etykietę {self.type_label}"
+	
+log_row = tuple[np.ndarray, int, list[float], label]
 
 log: list[log_entry] = []
-currently_tracked_objects: list[tuple[np.ndarray, int, list[float], label]] = []
+currently_tracked_objects: list[log_row] = []
 
-def track_objects(objects: list[tuple[np.ndarray, float, label]], frame_no: int):
+def track_objects(objects: list[tuple[np.ndarray, float, label]], frame_no: int) -> None:
 
 	global currently_tracked_objects
 
-	tracked_objects = [
+	tracked_objects: list[log_row] = [
 		(p + np.array([0, calibration.calibrated_speed]), a, c, l)
 		for p, a, c, l in currently_tracked_objects
 	]
 
-	found: list[tuple[np.ndarray, int, list[float]]] = []
-	discovered: list[tuple[np.ndarray, int, list[float]]] = []
+	found: list[log_row] = []
+	discovered: list[log_row] = []
 
 	while True:
 		
 		if len(objects) == 0 or len(tracked_objects) == 0:
 			break
-		el = tracked_objects.pop(0)
+		el: log_row = tracked_objects.pop(0)
 
 		objects.sort(key= lambda p: math.hypot(el[0][0] - p[0][0], el[0][1] - p[0][1]))
-		near_el = objects.pop(0)
+		near_el: tuple[np.ndarray, float, label] = objects.pop(0)
 
 		found.append((near_el[0], el[1], el[2] + [near_el[1]], el[3]))
 
@@ -80,7 +82,7 @@ def track_objects(objects: list[tuple[np.ndarray, float, label]], frame_no: int)
 
 	currently_tracked_objects = found + discovered
 
-def write_log(path: str):
+def write_log(path: str) -> None:
 	global log
 
 	log.extend([

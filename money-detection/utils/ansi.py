@@ -50,7 +50,7 @@ class fg:
 		CYAN    = "\u001b[96m"
 		WHITE   = "\u001b[97m"
 
-	def rgb(r: int, g: int, b: int): return f"\u001b[38;2;{r};{g};{b}m"
+	def rgb(cls, r: int, g: int, b: int): return f"\u001b[38;2;{r};{g};{b}m"
 
 
 class bg:
@@ -75,7 +75,7 @@ class bg:
 		CYAN    = "\u001b[106m"
 		WHITE   = "\u001b[107m"
 
-	def rgb(r: int, g: int, b: int): return f"\u001b[48;2;{r};{g};{b}m"
+	def rgb(cls, r: int, g: int, b: int): return f"\u001b[48;2;{r};{g};{b}m"
 
 
 class fmt:
@@ -105,16 +105,16 @@ class cur:
 	BEGIN     = "\u001b[0G"
 	TOP_BEGIN = "\u001b[0;0H"
 
-	def pos(col: int = 1, row: _t.Optional[int] = None):
+	def pos(cls, col: int = 1, row: _t.Optional[int] = None):
 		if row == None:
 			return f"\u001b[{col}G"
 		else:
 			return f"\u001b[{row};{col}H"
 		
-	def next(lines: int = 1):
+	def next(cls, lines: int = 1):
 		return f"\u001b[{lines}E"
 	
-	def prev(lines: int = 1):
+	def prev(cls, lines: int = 1):
 		return f"\u001b[{lines}F"
 
 def progress(

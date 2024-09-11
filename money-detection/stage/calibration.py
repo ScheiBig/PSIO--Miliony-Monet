@@ -2,11 +2,11 @@ import math
 import cv2
 import numpy as np
 
-from typing import TypedDict
+from typing import TypedDict, Literal
 
 CALIBRATION_CARD_SIDE_CM = 10.0
 
-def find_card(img: np.ndarray) -> tuple[list[np.ndarray], cv2.typing.RotatedRect, bool]:
+def find_card(img: np.ndarray) -> tuple[list[np.ndarray], cv2.typing.RotatedRect|tuple[()], bool]:
 	'''
 	Finds calibration card on image, assuming that card is only object currently on screen.
 
@@ -35,8 +35,8 @@ def find_card(img: np.ndarray) -> tuple[list[np.ndarray], cv2.typing.RotatedRect
 	_, (r_w, r_h), _ = rect
 
 	if abs(r_w - r_h) < 4:
-		box = cv2.boxPoints(rect)
-		box = np.int_(box)
+		box: np.ndarray = cv2.boxPoints(rect)
+		box = box.astype(np.int_)
 
 		return [box], rect, True
 
@@ -74,7 +74,8 @@ def calculate_size_and_speed(
 			v_h / CALIBRATION_CARD_SIDE_CM * px_size
 		)
 			for k, (v_w, v_h) in _og_size.items()
-	}
+	} # type: ignore [assignment] # this is partial dictionary construction
+	calibrated_size["0"] = px_size
 
 	global calibrated_speed
 	calibrated_speed = sum(dists) / len(dists)
@@ -87,7 +88,11 @@ def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> flo
 	x2, y2 = p2
 	return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
+Deno = Literal["10","20","50","100","200","500"]
+deno_list = ["10","20","50","100","200","500"]
+
 Pln = TypedDict("Pln", {
+	"0": float,
 	"10": tuple[float, float],
 	"20": tuple[float, float],
 	"50": tuple[float, float],
@@ -96,7 +101,7 @@ Pln = TypedDict("Pln", {
 	"500": tuple[float, float],
 })
 
-_og_size: Pln = {
+_og_size: dict[Deno, tuple[int, int]] = {
 	"10": (120, 60),
 	"20": (126, 63),
 	"50": (132, 66),
@@ -105,7 +110,7 @@ _og_size: Pln = {
 	"500": (150, 75),
 }
 
-calibrated_size: Pln = {}
+calibrated_size: Pln = {} # type: ignore [typeddict-item] # late-init by calculate_size_and_speed(..)
 '''Sizes of banknotes, calibrated do pixels on capture stream.'''
 
 calibrated_speed: float

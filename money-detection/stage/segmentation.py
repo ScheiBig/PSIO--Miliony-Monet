@@ -2,6 +2,8 @@ from typing import Literal, Optional, TypedDict, Union
 import cv2
 import numpy as np
 from stage import calibration
+import collections.abc as c_abc
+from typing import Any as unknown
 
 POLYGON_APPROX_EPSILON = 8 # 0.01 * contour length of biggest banknote
 POLYGON_TO_MIN_AREA_RECT_EPSILON = 0.04
@@ -47,6 +49,7 @@ def detect_silhouettes(img: np.ndarray) -> tuple[
 	min_y = 4
 	max_y = img.shape[0] - 4
 
+	contours: c_abc.Sequence[np.ndarray]
 	contours, _ = cv2.findContours(
 		img,
 		cv2.RETR_TREE,
@@ -62,11 +65,6 @@ def detect_silhouettes(img: np.ndarray) -> tuple[
 
 	for i, contour in enumerate(contours):
 		poly_len = cv2.arcLength(contour, True)
-		# poly_cont = cv2.approxPolyDP(
-		# 	contour,
-		# 	POLYGON_APPROX_EPSILON * poly_len,
-		# 	True
-		# )
 		poly_cont = cv2.approxPolyDP(
 			contour,
 			POLYGON_APPROX_EPSILON,
@@ -74,15 +72,13 @@ def detect_silhouettes(img: np.ndarray) -> tuple[
 		)
 
 		if len(poly_cont) == 4:
-
 			match _test_shape_validity(poly_cont, (min_y, max_y)):
 				case ("valid", rect):
-					result_rects.append(rect)
+					result_rects.append(rect) # type: ignore [arg-type] # this is literally narrowed by pattern matching
 				case "error":
 					error_contours.append(poly_cont)
 				case "ignored":
 					continue
-
 		elif len(poly_cont) == 3:
 			if _test_shape_touches_side(contour, (min_y, max_y)):
 				continue
@@ -143,7 +139,14 @@ def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tu
 	error_contours: list[np.ndarray] = []
 
 	for shape in unknown_shapes:
-		i_hull = cv2.convexHull(shape, returnPoints= False)
+
+		# Shape that has same convex hull are impossible to split, since having
+		#   all points laid on convex hull implies no defect points.
+		# This can be result of two situations:
+		# * shape touches front/back side of frame (with some padding), which
+		#   means that banknote is not still fully in frame - it is thrown out,
+		# * shape is fully in frame - it is assumed that this is foreign object.
+		i_hull: np.ndarray = cv2.convexHull(shape, returnPoints= False)
 		hull: np.ndarray = shape[i_hull[:, 0]]
 
 		if np.all(np.isin(hull, shape, assume_unique=True)) and hull.shape == shape.shape:
@@ -152,12 +155,31 @@ def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tu
 			error_contours.append(shape)
 			continue
 		
-		defects = cv2.convexityDefects(shape, i_hull)
-		i_defect_points = defects[:, 0, 2]
+		# Shape that does not overlap its convex hull, contains convexity
+		#   defects - function that retrieves those, returns array, where each
+		#   row contains one column with tuple of values - 3rd argument is only
+		#   one that is interesting to us - it is index of point from shape, 
+		#   which identifies defect point(s).
+		defects: np.ndarray = cv2.convexityDefects(shape, i_hull)
+		i_defect_points: np.ndarray = defects[:, 0, 2]
 		i_defect_points.sort()
 
+		# Two defect points - "V" or "T" shape, both of which have very special
+		#   property - line drawn from first to second defect point, can be used
+		#   to split the shape into two parts, which if you approximate
+		#   rectangle around them (to fix things like overlapping corner),
+		#   results with two banknote outlines.
 		if len(i_defect_points) == 2:
 			
+			# Numpy allows to split shape array using defect point indices.
+			# Depending on location of said indices, this can result in clean
+			#   split into two arrays (no further processing is needed),
+			#   or three arrays when points were somewhere in the middle - which
+			#   requires stitching first and last split into one shape
+			#   and second split into other. Copying first elements of 
+			#   not-included splits allows to have fuller shape (honestly, it is
+			#   ommitted in 2-splits line, because in used demo input, this is
+			#   an unreachable branch - never happened).
 			splits = np.split(shape, i_defect_points)
 			first: np.ndarray
 			second: np.ndarray
@@ -183,48 +205,64 @@ def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tu
 			result_rects.extend(res)
 			error_contours.extend(err)
 
+		# One defect point - "L" shape, where short side of one banknote touches
+		#   long side of other, and two sides are paralel and form single line.
 		elif len(i_defect_points) == 1:
 			
+			# Add index to shape - now each row instead of [x, y] is [x, y, i]
 			shape_i = np.hstack((
 				shape[:, 0],
 				np.arange(len(shape))[:, np.newaxis]
 			))
 
-			sh: np.ndarray = np.vstack((shape_i, shape_i, shape_i))
-			sp = i_defect_points[0]
-			dp: np.ndarray = sp + len(shape_i)
+			# Stacking 3 times on top of each other allows for easy indexing
+			#   (in middle stack) without fear of index overflow (will go
+			#   either to upper or lower stack)
+			shape_i_stack: np.ndarray = np.vstack((shape_i, shape_i, shape_i))
+			
+			# Select only defect point index, and offset it by point 
+			#   count - this will allow to index into middle stack
+			sp: int = i_defect_points[0]
+			dp = sp + len(shape_i)
 
-			dp_neighbors: np.ndarray = sh[dp - 1 : dp + 2]
-			others: np.ndarray = sh[dp - len(shape_i) + 2 : dp - 1]
+			# Select defect point, and its immediate neighbors 
+			#   (which is [ prev, defect, next] with original order).
+			# Two neighboring points are used to attempt to create split line
+			#   of two banknotes (line that can be described by defect point
+			#   and neighbor).
+			dp_neighbors: np.ndarray = shape_i_stack[dp - 1 : dp + 2]
+			# And then select rest of points - "outer points" relative to
+			#   defect point
+			others: np.ndarray = shape_i_stack[dp - len(shape_i) + 2 : dp - 1]
 
-			new_split_points: list[tuple[np.ndarray, tuple[int, int, int]]] = []
+			new_split_points: list[tuple[np.ndarray, tuple[int, int]]] = []
 
 			for i in range(len(others) - 1):
-				i1 = _get_intersection((others[i], others[i+1]), dp_neighbors[:2])
-				i2 = _get_intersection((others[i], others[i+1]), dp_neighbors[1:])
+				i1: np.ndarray = _get_intersection((others[i], others[i+1]), dp_neighbors[:2, :2]) # type: ignore [assignment] # implied by geometry
+				i2: np.ndarray = _get_intersection((others[i], others[i+1]), dp_neighbors[1:, :2]) # type: ignore [assignment] # implied by geometry
 
-				x_min = min(others[i, 0], others[i+1, 0])
-				x_max = max(others[i, 0], others[i+1, 0])
-				y_min = min(others[i, 1], others[i+1, 1])
-				y_max = max(others[i, 1], others[i+1, 1])
+				x_min: int = min(others[i, 0], others[i+1, 0])
+				x_max: int = max(others[i, 0], others[i+1, 0])
+				y_min: int = min(others[i, 1], others[i+1, 1])
+				y_max: int = max(others[i, 1], others[i+1, 1])
 
 				if x_min < i1[0] \
 					and x_max > i1[0] \
 					and y_min < i1[1] \
 					and y_max > i1[1]:
-					new_split_points.append([i1, (others[i, 2], others[i+1, 2])])
+					new_split_points.append((i1, (int(others[i, 2]), int(others[i+1, 2]))))
 
 				if x_min < i2[0] \
 					and x_max > i2[0] \
 					and y_min < i2[1] \
 					and y_max > i2[1]:
-					new_split_points.append([i2, (others[i, 2], others[i+1, 2])])
+					new_split_points.append((i2, (others[i, 2], others[i+1, 2])))
 
 			shape_ex = np.vstack([shape, shape])
 
 			# first try
-			res: list[cv2.typing.RotatedRect] = []
-			err: list[np.ndarray] = []
+			res: list[cv2.typing.RotatedRect] = [] # type: ignore [no-redef] # redefine in different branch should be permitted
+			err: list[np.ndarray] = [] # type: ignore [no-redef] # redefine in different branch should be permitted
 
 			if len(new_split_points) != 2:
 				if _test_shape_touches_side(shape, (min_y, max_y)):
@@ -302,6 +340,8 @@ def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tu
 				result_rects.extend(res_alt)
 				error_contours.extend(err_alt)
 
+		# More defect points could indicate more than two banknotes, 
+		#   which is not supported.
 		else:
 			error_contours.append(shape)
 
@@ -341,7 +381,8 @@ def _test_shape_validity(
 	rect_area = (r_w * r_h)
 	contour_area = cv2.contourArea(contour)
 
-	box = np.int_(cv2.boxPoints(rect))
+	box: np.ndarray = cv2.boxPoints(rect)
+	box = box.astype(np.int_)
 
 	if side_ratio < (1 + SIDE_RATIO_MIN_AREA_RECT_EPSILON) \
 		and side_ratio > (1 - SIDE_RATIO_MIN_AREA_RECT_EPSILON) \
@@ -359,7 +400,7 @@ def _test_shape_validity(
 		return "error"
 
 
-def _test_shape_touches_side(contour_or_box: np.ndarray, min_max_y) -> np.bool:
+def _test_shape_touches_side(contour_or_box: np.ndarray, min_max_y) -> np.bool_:
 	'''
 	Test whether shape touches sides of capture.
 
@@ -404,11 +445,11 @@ def _fit_shape_or_approx_to_rect(
 	
 	match _test_shape_validity(approx, min_max_y, False):
 		case ("valid", rect):
-			result_rects.append(rect)
+			result_rects.append(rect)  # type: ignore [arg-type] # this is literally narrowed by pattern matching
 		case "error":
 			match _test_shape_validity(shape, min_max_y, False):
 				case ("valid", rect):
-					result_rects.append(rect)
+					result_rects.append(rect)  # type: ignore [arg-type] # this is literally narrowed by pattern matching
 				case "error":
 					error_contours.append(shape)
 				case "ignored":
@@ -418,31 +459,42 @@ def _fit_shape_or_approx_to_rect(
 
 
 def _get_intersection(
-	line_1: tuple[np.ndarray, np.ndarray],
-	line_2: tuple[np.ndarray, np.ndarray]
+	line_1: tuple[np.ndarray, np.ndarray] | np.ndarray,
+	line_2: tuple[np.ndarray, np.ndarray] | np.ndarray
 ) -> Optional[np.ndarray]:
 	'''
 	Finds intersection of two lines, that are going through points.
 
-	:param line_1: tuple of two 2d element that line goes through.
-	:param line_2: tuple of two 2d element that line goes through.
+	:param line_1: tuple of two 2d element that line goes through, or ndarray of same shape.
+	:param line_2: tuple of two 2d element that line goes through, or ndarray of same shape.
 	:return: Intersection point, or ``None`` if lines are parallel.
 	'''
 
 	x = 0
 	y = 1
+	p1a: np.ndarray
+	p1b: np.ndarray
+	p2a: np.ndarray
+	p2b: np.ndarray
+	x_i: float|int
+	y_i: float|int
 
 	p1a, p1b = line_1
 	p2a, p2b = line_2
 
 	# parallel, vertical
 	if p1a[x] == p1b[x] and p2a[x] == p2b[x]:
-		return
+		return None
+
+	m1: float
+	m2: float
+	b1: float
+	b2: float
 
 	# First vertical
 	if p1a[x] == p1b[x]:
-		m2: float = (p2b[y] - p2a[y]) / (p2b[x] - p2a[x])
-		b2: float = p2a[y] - m2 * p2a[x]
+		m2 = (p2b[y] - p2a[y]) / (p2b[x] - p2a[x])
+		b2 = p2a[y] - m2 * p2a[x]
 
 		x_i = p1a[x]
 		y_i = m2 * p1a[x] + b2
@@ -451,23 +503,23 @@ def _get_intersection(
 
 	# Second vertical
 	if p2a[x] == p2b[x]:
-		m1: float = (p1b[y] - p1a[y]) / (p1b[x] - p1a[x])
-		b1: float = p1a[y] - m1 * p1a[x]
+		m1 = (p1b[y] - p1a[y]) / (p1b[x] - p1a[x])
+		b1 = p1a[y] - m1 * p1a[x]
 
 		x_i = p2a[x]
 		y_i = m1 * p2a[x] + b1
 
 		return np.array((x_i, y_i), dtype= np.int_)
 
-	m1: float = (p1b[y] - p1a[y]) / (p1b[x] - p1a[x])
-	m2: float = (p2b[y] - p2a[y]) / (p2b[x] - p2a[x])
+	m1 = (p1b[y] - p1a[y]) / (p1b[x] - p1a[x])
+	m2 = (p2b[y] - p2a[y]) / (p2b[x] - p2a[x])
 
 	# parallel, slant or horizontal
 	if m1 == m2:
-		return
+		return None
 
-	b1: float = p1a[y] - m1 * p1a[x]
-	b2: float = p2a[y] - m2 * p2a[x]
+	b1 = p1a[y] - m1 * p1a[x]
+	b2 = p2a[y] - m2 * p2a[x]
 
 	x_i = (b2 - b1) / (m1 - m2)
 	y_i = m1 * x_i + b1
@@ -482,4 +534,4 @@ sc = TypedDict("sc", {
 	"max_h": float,
 })
 
-size_cache: sc = None
+size_cache: sc = None # type: ignore [assignment] # late-init by detect_silhouettes(..)
