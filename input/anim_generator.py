@@ -7,8 +7,6 @@ import numpy as np
 import cv2
 
 from utils import *
-from utils.pid import *
-from utils.slideshow import *
 
 r.seed("Chcemy losowo, ale przewidywalnie")
 
@@ -24,7 +22,7 @@ bg_take = cv2.imread("./input/cut_pics/calibration_bg.jpg")
 
 h, w, _ = cur_take.shape
 
-crop = np.zeros((w, w, 3), dtype= np.uint8)
+crop = np.zeros((w, w, 3), dtype= np.uint)
 
 off = 0
 OFFSET_GAIN = 25
@@ -63,7 +61,7 @@ for i in INTs:
 
 	h_off = int(h_off_jit)
 	w_off = offsets(int(w_off_jit))
-	crop = bg_take[off_bg:-off_bg, :, :].copy()
+	crop = bg_take[off_bg:-off_bg, :, :].copy() # type: ignore [assignment] # type inheritance allows this
 
 	if off > h:
 		cur_take = next_take
@@ -75,7 +73,7 @@ for i in INTs:
 	crop[:hh, w_off["x_"], :] = crop_cur[:, w_off["_x"], :]
 	if hh < w:
 		if id(cur_take) == id(next_take):
-			next_take = next(takes, None)
+			next_take = next(takes, None) # type: ignore [arg-type] # None to prevent throwing
 		if next_take is None:
 			if not finalizing:
 				next_take = bg_take

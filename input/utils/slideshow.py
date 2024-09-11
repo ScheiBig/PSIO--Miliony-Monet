@@ -7,7 +7,7 @@ __all__ = [
 	"slideshow"
 ]
 
-def slideshow(of: col_abc.Iterator[str]) -> col_abc.Generator[np.ndarray, None, None]:
+def slideshow(of: col_abc.Iterable[str]) -> col_abc.Generator[np.ndarray, None, None]:
 	'''
 	Accepts collection of paths to images, and returns lazy iterator over images \
 		loaded with ``cv2``.
