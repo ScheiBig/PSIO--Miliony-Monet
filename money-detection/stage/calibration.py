@@ -109,8 +109,14 @@ _og_size: dict[Deno, tuple[int, int]] = {
 	"200": (144, 72),
 	"500": (150, 75),
 }
+'''
+Original banknote  sizes, in millimeters
+'''
 
 calibrated_size: Pln = {} # type: ignore [typeddict-item] # late-init by calculate_size_and_speed(..)
-'''Sizes of banknotes, calibrated do pixels on capture stream.'''
+'''
+Sizes of banknotes, calibrated do pixels on capture stream. 
+"0" key contains size of centimeter on frame in px.
+'''
 
 calibrated_speed: float

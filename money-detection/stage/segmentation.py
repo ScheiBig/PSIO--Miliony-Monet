@@ -197,10 +197,10 @@ def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tu
 			if second.size > 2:
 				_fit_shape_or_approx_to_rect(second, res, err, (min_y, max_y))
 
-			im1 = img.copy()
+			# im1 = img.copy()
 
-			cv2.drawContours(im1, [first, second], -1, (255, 255, 255), 2)
-			cv2.imshow("Cnt", im1)
+			# cv2.drawContours(im1, [first, second], -1, (255, 255, 255), 2)
+			# cv2.imshow("Cnt", im1)
 
 			result_rects.extend(res)
 			error_contours.extend(err)
