@@ -39,16 +39,18 @@ checkerboard = np.tile(checkerboard, (50, 50))
 atexit.register(lambda: tracking.write_log("LOG"))
 
 times = spoiling_queue(maxsize= 10)
+times_ex: list[list[float]] = []
 
-writer = cv2.VideoWriter(
-	"./money-detection/notes_on_belt.mkv",
-	cv2.VideoWriter.fourcc(*"xvid"),
-	fps= 10,
-	frameSize= (1716, 858),
-	isColor= True
-)
+# writer = cv2.VideoWriter(
+# 	"./money-detection/notes_on_belt.mkv",
+# 	cv2.VideoWriter.fourcc(*"xvid"),
+# 	fps= 10,
+# 	frameSize= (1716, 858),
+# 	isColor= True
+# )
 
 while keep:
+	tims: list[float] = []
 	sw = stopwatch()
 	frame_was_read, frame = cap.read()
 	frame_no = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -59,6 +61,7 @@ while keep:
 		cv2.destroyAllWindows()
 		cap.release()
 		break
+	cv2.imshow("Original frame", frame)
 
 	frame_gr: np.ndarray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	# mask = stage.processing.threshold_mask(frame_gr, bg_threshold)
@@ -66,7 +69,6 @@ while keep:
 
 	frame_nobg = frame.copy()
 	frame_nobg[mask == 0] = 0
-	cv2.imshow("nobg", frame_nobg)
 
 	frame_og = frame.copy()
 
@@ -87,19 +89,15 @@ while keep:
 		find_card = calibration.find_card(mask)
 		card_contours, card_rect, card_on_screen = find_card
 
-		img_card = cv2.drawContours(frame.copy(), card_contours, -1, (0, 255, 255), 3)
+		img_card = cv2.drawContours(frame.copy(), card_contours, -1, (255, 0, 255), 3)
 
 		if card_was_on_screen and not card_on_screen:
 			calibrating = False
-			# size_px_per_cm, speed_px_per_frame = stage.calibration.calculate_size_and_speed(
-			# 	calibration_size,
-			# 	calibration_points
-			# )
+			
 			size_px_per_cm, speed_px_per_frame = calibration.calculate_size_and_speed(
 				calibration_size,
 				calibration_points
 			) 
-			# stage.segmentation.calibrated_size = stage.calibration.calibrated_size
 
 		if len(card_rect) == 3:
 			(r_x, r_y), (r_w, r_h), _ = card_rect
@@ -111,96 +109,72 @@ while keep:
 		
 		cv2.imshow("Detected shapes", img_card)
 	else:
-		# rects, errors, shapes = stage.segmentation.detect_silhouettes(mask)
 		rects: list[cv2_t.RotatedRect]
 		errors: list[np.ndarray]
 		shapes: list[np.ndarray]
-		rects, errors, shapes = segmentation.detect_silhouettes(mask)
-		rect_cont: list[np.ndarray] = [ np.asarray(cv2.boxPoints(r), dtype= np.int_) for r in rects ]
 
-		img_card = frame.copy()
-		img_card = cv2.drawContours(img_card, rect_cont, -1, (0, 255, 0), 3)
-		img_card = cv2.drawContours(img_card, errors, -1, (0, 0, 255), 3)
+		## Simple segmentation ##
+		s_w = stopwatch()
+		rects, errors, shapes = segmentation.get_silhouettes(mask)
+		tims.append(s_w.stop())
 
-		img_card = cv2.drawContours(img_card, shapes, -1, (255, 0, 0), 1)
-		# rects_a, errors_a = stage.segmentation.detect_split_shapes(frame, shapes)
-		rects_a, errors_a = segmentation.detect_split_shapes(frame_nobg, shapes)
+		## Complex segmentation ##
+		s_w.start()
+		rects_a, errors_a = segmentation.get_split_shapes(frame_nobg, shapes)
+		tims.append(s_w.stop())
 
-		rect_cont_a = [ np.asarray(cv2.boxPoints(r), dtype= np.int_) for r in rects_a ]
-		img_card = cv2.drawContours(img_card, rect_cont_a, -1, (127, 255, 127), 3)
-		img_card = cv2.drawContours(img_card, errors_a, -1, (127, 127, 255), 3)
+		## Join results ##
+		rects.extend(rects_a)
+		errors.extend(errors_a)
 
-
-		# shape_and_hulls = [
-		# 	(sh, cv2.convexHull(sh), cv2.convexHull(sh, returnPoints=False))
-		# 		for sh in shapes
-		# ]
-		# shape_hulls = [ shh[1] for shh in shape_and_hulls ]
-		# shape_defects = []
-		# for shh in shape_and_hulls:
-		# 	defs = cv2.convexityDefects(shh[0], shh[2])
-		# 	if defs is not None:
-		# 		defs = defs[:, 0, 2]
-		# 	else:
-		# 		continue
-		# 	points = []
-		# 	for i in defs:
-		# 		points.append(shh[0][i])
-		# 	shape_defects.append(np.array(points))
-			
+		## Query tracked objects ##
+		s_w.start()
+		new, known = tracking.query_objects(rects)
+		tims.append(s_w.stop())
 		
+		## Run detection only on new objects ##
+		s_w.start()
+		notes, unkn = detection.detect_banknotes(frame_nobg, mask, new)
+		tims.append(s_w.stop())
+		
+		## Translate errors for further usage ##
+		f_errors = [ detection.erroneous_object(er) for er in errors ]
 
-		# img_card = cv2.drawContours(img_card, shape_hulls, -1, (255, 255, 0), 3)
-		# img_card = cv2.drawContours(img_card, shape_defects, -1, (255, 255, 255), 3)
+		## Add cached notes to newly detected ##
+		notes.extend(known)
 
-
-		# val = stage.detection.detect_banknotes(frame_og, mask, (rects + rects_a))
-		notes, errs = detection.detect_banknotes(frame_nobg, mask, (rects + rects_a))
+		## Draw all shapes ##
 		for n in notes:
 			n.draw(ff)
-		cv2.drawContours(ff, errors, -1, (0, 0, 255), 3)
-		cv2.drawContours(ff, errors_a, -1, (127, 127, 255), 3)
+		for un in unkn:
+			un.draw(ff)
+		for er in f_errors:
+			er.draw(ff)
+		cv2.imshow("Detected shapes", ff)
 
-		cv2.imshow("detection", ff)
-
-		# for x_y, v in val:
-		# 	img_card = cv2.putText(
-		# 		img_card,
-		# 		v,
-		# 		np.int_([x_y[0] - 50, x_y[1]]),
-		# 		cv2.FONT_HERSHEY_SIMPLEX,
-		# 		0.75,
-		# 		(127, 255, 0),
-		# 		1
-		# 	)
-
-		# objects: list[tuple[np.ndarray, float, stage.tracking.label]] = []
+		## Track all objects ##
+		s_w.start()
 		objects: list[tracking.track_obj] = []
 
-		for r in (rects + rects_a):
-			# objects.append((r[0], 1.0, stage.tracking.label.banknote_unknown))
-			objects.append(((r[0][0],r[0][1]), 1.0, tracking.label.banknote_unknown))
+		for n in notes:
+			objects.append((n, n.confidence() / 100, tracking.label.of(n.value)))
+		for un in unkn:
+			objects.append((un, 0, tracking.label.unknown_label))
+		for er in f_errors:
+			objects.append((er, 1.0, tracking.label.unknown_shape))
 
-		for e in (errors + errors_a):
-			M = cv2.moments(e)
-			cx = int(M['m10']/M['m00'])
-			cy = int(M['m01']/M['m00'])
-			# objects.append((np.array([cx, cy]), 1.0, stage.tracking.label.unknown_shape))
-			objects.append(((cx, cy), 1.0, tracking.label.unknown_shape))
-
-		# stage.tracking.track_objects(objects, frame_no)
 		tracking.track_objects(objects, frame_no)
+		tims.append(s_w.stop())
 
-		cv2.imshow("Detected shapes", img_card)
+		tims.append(len(notes))
+		tims.append(len(unkn))
 
-		with open("./rect", "a") as f:
-			for r in (rects + rects_a):
-				f.write(f"{r}\n")
-
-	# cv2.imshow("Mask", mask)
-	# cv2.imshow("Capture", frame)
+	## Print debug info to terminal ##
 	et = sw.stop()
 	times.put(et)
+	tims.insert(0, 1000 / et if et != 0.0 else float("nan"))
+	tims.insert(0, et)
+	times_ex.append(tims)
 	fps = 1000 / times.avg()
 	print(f"{ansi.cur.TOP_BEGIN}")
 	print(f"{ansi.cur.TOP_BEGIN}Numer klatki: {frame_no:10.0f}")
@@ -211,10 +185,10 @@ while keep:
 		print(f"Liczba pikseli na centymetr: {size_px_per_cm:10.4f}")
 		print(f"Prędkość pikseli na klatkę: {speed_px_per_frame:10.4f}")
 
-	fr_out[:, :frame.shape[1], :] = frame_og
-	fr_out[:, -frame.shape[1]:, :] = ff
+	# fr_out[:, :frame.shape[1], :] = frame_og
+	# fr_out[:, -frame.shape[1]:, :] = ff
 
-	writer.write(fr_out)
+	# writer.write(fr_out)
 
 	match cv2.waitKey(wait_time):
 		case 27:
@@ -238,4 +212,11 @@ while keep:
 		case 113: # == ord("q")
 			cap.set(cv2.CAP_PROP_POS_FRAMES, int(input("Enter frame number to jump to:")))
 
-writer.release()
+# writer.release()
+with open("TIMES.CSV", "w", encoding="utf-8") as tms:
+	tms.write("all_ms;all_fps;segm_ms;split_ms;query_ms;detect_ms;track_ms;banknotes;unknowns\n")
+	for t in times_ex:
+		for i, v in enumerate(t):
+			tms.write(f"{v:8.2f};")
+		tms.write("\n")
+

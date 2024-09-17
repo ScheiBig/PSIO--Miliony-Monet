@@ -12,7 +12,7 @@ BANKNOTE_SIDE_RATIO = 2.0
 BANKNOTE_SIDE_EPSILON_RATIO = 0.1
 MIN_OBJECT_SIZE = 1000
 
-def detect_silhouettes(img: np.ndarray) -> tuple[
+def get_silhouettes(img: np.ndarray) -> tuple[
 	list[cv2.typing.RotatedRect], list[np.ndarray], list[np.ndarray]
 ]:
 	'''
@@ -97,7 +97,7 @@ def detect_silhouettes(img: np.ndarray) -> tuple[
 	return result_rects, error_contours, unknown_contours
 
 
-def detect_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tuple[
+def get_split_shapes(img: np.ndarray, unknown_shapes: list[np.ndarray]) -> tuple[
 	list[cv2.typing.RotatedRect], list[np.ndarray]
 ]:
 	'''

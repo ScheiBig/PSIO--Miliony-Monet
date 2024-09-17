@@ -1,7 +1,7 @@
 import math
 import re
 import time
-from typing import Literal, Tuple, TypedDict, cast
+from typing import Literal, TypedDict, cast
 import cv2
 import cv2.typing as cv2_t
 import numpy as np
@@ -62,7 +62,25 @@ num_trans_dict = {
 Dictionary for translating 
 '''
 
-class detected_banknote(ABC):
+class trackable(ABC):
+
+	@abstractmethod
+	def draw(self, img: np.ndarray) -> np.ndarray:
+		'''
+		Draws this object features onto provided image.
+
+		:param img: image to draw object to.
+		:return: ``img`` after modifications.
+		'''
+		raise NotImplementedError()
+	
+	def center(self) -> int_point:
+		'''
+		Returns center of mass of this object.
+		'''
+		raise NotImplementedError()
+
+class detected_banknote(trackable):
 
 	def __init__(self,
 		value: calibration.Deno,
@@ -80,16 +98,6 @@ class detected_banknote(ABC):
 		pass
 
 	@abstractmethod
-	def draw(self, img: np.ndarray) -> np.ndarray:
-		'''
-		Draws this banknote features onto provided image.
-
-		:param img: image to draw banknote to.
-		:return: ``img`` after modifications.
-		'''
-		raise NotImplementedError()
-	
-	@abstractmethod
 	def confidence(self) -> int:
 		'''
 		Calculates confidence of detection.
@@ -97,6 +105,10 @@ class detected_banknote(ABC):
 		:return: % of confidence that label was assigned correctly.
 		'''
 		raise NotImplementedError()
+	
+	def center(self) -> int_point:
+		(c_x, c_y), _, _ = self.rect
+		return (int(c_x), int(c_y))
 
 
 class banknote_front(detected_banknote):
@@ -257,13 +269,64 @@ class banknote_back(detected_banknote):
 
 		return int(conf * 100)
 
+
+class undetected_object(trackable):
+
+	def __init__(self,
+		rect: cv2_t.RotatedRect,
+	) -> None:
+		self.rect: cv2_t.RotatedRect = rect
+		
+	def draw(self, img: np.ndarray) -> np.ndarray:
+		cv2.drawContours(
+			img,
+			[cv2.boxPoints(self.rect).astype(np.int_)],
+			-1,
+			(0, 255, 255),
+			2
+		)
+		return img
+	
+	def center(self) -> int_point:
+		(c_x, c_y), _, _ = self.rect
+		return (int(c_x), int(c_y))
+	
+
+class erroneous_object(trackable):
+	
+	def __init__(self,
+		contour_or_rotatedRect: np.ndarray | cv2_t.RotatedRect
+	) -> None:
+		self.contour: np.ndarray
+		if isinstance(contour_or_rotatedRect, np.ndarray):
+			self.contour = contour_or_rotatedRect.astype(np.int_)
+		else:
+			self.contour = cv2.boxPoints(contour_or_rotatedRect).astype(np.int_)
+
+	def draw(self, img: np.ndarray) -> np.ndarray:
+		cv2.drawContours(
+			img,
+			[self.contour],
+			-1,
+			(64, 64, 255),
+			2
+		)
+		return img
+		
+	def center(self) -> int_point:
+		M: cv2_t.Moments = cv2.moments(self.contour)
+		c_x = int(M["m10"]/M["m00"])
+		c_y = int(M["m01"]/M["m00"])
+
+		return (c_x, c_y)
+
 def detect_banknotes(
 	img: np.ndarray,
 	mask: np.ndarray,
 	rects: list[cv2_t.RotatedRect]
-) -> tuple[list[detected_banknote], list[cv2_t.RotatedRect]]:
+) -> tuple[list[detected_banknote], list[undetected_object]]:
 	
-	ret: tuple[list[detected_banknote], list[cv2_t.RotatedRect]] = ([], [])
+	ret: tuple[list[detected_banknote], list[undetected_object]] = ([], [])
 
 	for i, rect in enumerate(rects):
 		(r_x, r_y), (r_w, r_h), r_a = rect
@@ -296,7 +359,7 @@ def detect_banknotes(
 		banknote = banknote[off_y : off_y + r_h, off_x : off_x + r_w, :]
 		flip_banknote = np.rot90(banknote, 2)
 
-		cv2.imshow(f"bn {i}", banknote)
+		# cv2.imshow(f"bn {i}", banknote)
 
 		# try to detect in each orientation
 		note: detected_banknote | None
@@ -336,6 +399,8 @@ def detect_banknotes(
 		if note is not None:
 			ret[0].append(note)
 			continue
+
+		ret[1].append(undetected_object(rect))
 
 	return ret
 
@@ -396,7 +461,7 @@ def _detect_front(
 	thr: int = min(ski.filters.threshold_multiotsu(den[den != 0], 2))
 	den = np.uint8(den < thr) * 255
 
-	cv2.imshow(f"den {i}", den) ## >debug<
+	# cv2.imshow(f"den {i}", den) ## >debug<
 
 	read_den: list[eOcr_res] = reader.readtext(den)
 	den_val: eOcr_res
@@ -413,7 +478,7 @@ def _detect_front(
 			break
 	else:
 		l = next(iter(read_den), (None, "---"))
-		print(f"b_den_unk {i}", next(iter(read_den), (None, "---"))[1])
+		# print(f"b_den_unk {i}", next(iter(read_den), (None, "---"))[1])
 		return None
 	
 	den_box: np.ndarray = _place_bbox_back_to_image(
@@ -485,7 +550,7 @@ def _detect_front(
 	b_symbol = cv2.morphologyEx(b_symbol, cv2.MORPH_CLOSE, ski.morphology.disk(2))
 	cv2.floodFill(b_symbol, None, (W//2, H//2), 255) # type: ignore [call-overload]
 
-	cv2.imshow(f"b_name {i}", b_symbol) ## >debug<
+	# cv2.imshow(f"b_name {i}", b_symbol) ## >debug<
 
 	## Results ##
 
