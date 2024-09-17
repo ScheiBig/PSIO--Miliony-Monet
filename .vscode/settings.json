@@ -4,6 +4,7 @@
 		"imsave",
 		"imshow",
 		"ndarray",
+		"ommitted",
 		"skimage"
 	]
 }
