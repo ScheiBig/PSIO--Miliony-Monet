@@ -12,7 +12,7 @@ from utils import *
 REMOVE_BG = True
 
 print(ansi.clear.ALL, end=None)
-wait_time = 1
+wait_time = 0
 
 cap = cv2.VideoCapture("input/notes_on_belt.mkv")
 keep = True
@@ -64,7 +64,6 @@ while keep:
 	cv2.imshow("Original frame", frame)
 
 	frame_gr: np.ndarray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-	# mask = stage.processing.threshold_mask(frame_gr, bg_threshold)
 	mask: np.ndarray = processing.threshold_mask(frame_gr, bg_threshold)
 
 	frame_nobg = frame.copy()
@@ -120,7 +119,7 @@ while keep:
 
 		## Complex segmentation ##
 		s_w.start()
-		rects_a, errors_a = segmentation.get_split_shapes(frame_nobg, shapes)
+		rects_a, errors_a = segmentation.get_split_shapes(mask, shapes)
 		tims.append(s_w.stop())
 
 		## Join results ##
@@ -166,8 +165,8 @@ while keep:
 		tracking.track_objects(objects, frame_no)
 		tims.append(s_w.stop())
 
-		tims.append(len(notes))
-		tims.append(len(unkn))
+		tims.append(len(notes) + len(unkn) + len(f_errors))
+		tims.append(len(unkn) + len(new))
 
 	## Print debug info to terminal ##
 	et = sw.stop()
@@ -214,7 +213,7 @@ while keep:
 
 # writer.release()
 with open("TIMES.CSV", "w", encoding="utf-8") as tms:
-	tms.write("all_ms;all_fps;segm_ms;split_ms;query_ms;detect_ms;track_ms;banknotes;unknowns\n")
+	tms.write("all_ms;all_fps;segm_ms;split_ms;query_ms;detect_ms;track_ms;objects;unknowns\n")
 	for t in times_ex:
 		for i, v in enumerate(t):
 			tms.write(f"{v:8.2f};")
